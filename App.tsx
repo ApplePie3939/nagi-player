@@ -70,8 +70,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audioStatus.didJustFinish]);
 
-  useEventListener(videoPlayer, 'timeUpdate', ({ currentTime }) => setVideoTime(currentTime));
-  useEventListener(videoPlayer, 'sourceLoad', ({ duration }) => setVideoDuration(duration));
+  useEventListener(videoPlayer, 'timeUpdate', ({ currentTime }) => {
+    setVideoTime(currentTime);
+    setVideoDuration(videoPlayer.duration);
+  });
   useEventListener(videoPlayer, 'playingChange', ({ isPlaying }) => setVideoPlaying(isPlaying));
   useEventListener(videoPlayer, 'playToEnd', () => { if (selected.kind === 'video') playNext(); });
 
