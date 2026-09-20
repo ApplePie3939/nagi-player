@@ -7,7 +7,7 @@ import type { LocalAsset } from './types';
  */
 export const mediaAssets: Record<'morning' | 'movie', LocalAsset> = {
   morning: require('../assets/media/taiko2.mp3'),
-  movie: require('../assets/media/Cat_Jumpscare.webm.1080p.vp9.mp4'),
+  movie: require('../assets/media/cat-jumpscare-h264.mp4'),
 };
 
 /** Artwork can be registered independently from media while test clips are prepared. */

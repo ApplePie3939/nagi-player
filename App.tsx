@@ -3,8 +3,8 @@ import { Alert, Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, Vi
 import Slider from '@react-native-community/slider';
 import { Asset } from 'expo-asset';
 import { useEventListener } from 'expo';
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { isPictureInPictureSupported, useVideoPlayer, VideoView } from 'expo-video';
 import { playlist } from './src/playlist';
 import type { PlaylistItem } from './src/types';
 
@@ -18,6 +18,7 @@ export default function App() {
   const [videoTime, setVideoTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoPlaying, setVideoPlaying] = useState(false);
+  const [pictureInPictureSupported, setPictureInPictureSupported] = useState(false);
   const selected = playlist[selectedIndex];
   const shouldAutoplay = useRef(false);
   const videoViewRef = useRef<VideoView>(null);
@@ -26,15 +27,14 @@ export default function App() {
   const audioStatus = useAudioPlayerStatus(audioPlayer);
   const videoPlayer = useVideoPlayer(null, player => {
     player.timeUpdateEventInterval = 0.25;
-    player.staysActiveInBackground = true;
   });
 
   useEffect(() => {
-    void setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
+    setPictureInPictureSupported(isPictureInPictureSupported());
   }, []);
 
   useEffect(() => {
-    // Stop both native players before a source replacement to prevent overlap.
+    // Stop both players before a source replacement to prevent overlap.
     audioPlayer.pause();
     audioPlayer.clearLockScreenControls();
     videoPlayer.pause();
@@ -101,10 +101,10 @@ export default function App() {
     <Slider value={currentTime} minimumValue={0} maximumValue={Math.max(duration, 1)} minimumTrackTintColor="#5a67d8" maximumTrackTintColor="#d8d9e8" thumbTintColor="#5a67d8" onSlidingComplete={value => { if (selected.kind === 'audio') void audioPlayer.seekTo(value); else videoPlayer.currentTime = value; }} />
     <View style={styles.timeRow}><Text>{formatTime(currentTime)}</Text><Text>{formatTime(duration)}</Text></View>
     <View style={styles.controls}><Control label="前へ" onPress={() => select(Math.max(0, selectedIndex - 1))} disabled={selectedIndex === 0} /><Control label={isPlaying ? '一時停止' : '再生'} primary onPress={toggle} /><Control label="次へ" onPress={playNext} disabled={selectedIndex === playlist.length - 1} /></View>
-    {selected.kind === 'video' && <Pressable style={styles.pipButton} onPress={() => void videoViewRef.current?.startPictureInPicture()}><Text style={styles.pipText}>ピクチャ・イン・ピクチャを開始</Text></Pressable>}
+    {selected.kind === 'video' && pictureInPictureSupported && <Pressable style={styles.pipButton} onPress={() => void videoViewRef.current?.startPictureInPicture().catch(() => undefined)}><Text style={styles.pipText}>ピクチャ・イン・ピクチャを開始</Text></Pressable>}
     <Text style={styles.sectionTitle}>再生リスト</Text>
     {playlist.map((item, index) => <PlaylistRow key={item.id} item={item} selected={index === selectedIndex} onPress={() => select(index)} />)}
-    <Text style={styles.notice}>素材を登録するまで再生は開始されません。</Text>
+    <Text style={styles.notice}>対応ブラウザでは、メディア操作とピクチャ・イン・ピクチャを利用できます。</Text>
   </ScrollView></SafeAreaView>;
 }
 

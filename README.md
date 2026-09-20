@@ -1,41 +1,28 @@
 # 凪プレイヤー
 
-iPhone 向けの、同梱 MP3／MP4 専用メディアプレイヤーです。Expo Router を使わない単一画面の TypeScript Expo アプリで、MP3 はバックグラウンド・ロック画面操作、MP4 はインライン再生と Picture in Picture（PiP）に対応します。
+同梱した音声・動画をブラウザで再生するWeb専用PWAです。公開版は [GitHub Pages](https://ApplePie3939.github.io/nagi-player/) で利用できます。iPhoneではSafariで開き、共有メニューの「ホーム画面に追加」を選ぶとアプリのように起動できます。
 
 ## 素材の登録
 
-正式な利用許諾済み素材を次へ配置します。
+利用許諾済みの素材を次へ配置します。
 
-- `assets/media/` — MP3 / MP4
+- `assets/media/` — 音声は MP3、動画は H.264 映像／AAC 音声の MP4
 - `assets/artwork/` — 項目ごとの PNG / JPG
 
-素材のファイル名・登録は [src/mediaAssets.ts](src/mediaAssets.ts) に集約しています。ここで静的な `require()` に置き換え、表示情報は [src/playlist.ts](src/playlist.ts) で編集してください。現時点では素材が未提供のため、再生操作は登録方法を知らせる案内を表示します。
+ファイル名と再生リストへの登録は [src/mediaAssets.ts](src/mediaAssets.ts) と [src/playlist.ts](src/playlist.ts) に集約しています。素材を同梱・配布する許諾を確認してからコミットしてください。
 
-配布するすべての音声、映像、アートワークについて、アプリへの同梱・配布に必要な利用許諾を確認してください。
-
-## ローカル起動
+## 開発と公開
 
 ```powershell
 npm install
 npm run typecheck
-npx expo start --dev-client
+npm run web
 ```
 
-## iPhone development build
+production成果物を作るには `npm run build:web` を実行します。`dist/` をローカルで確認するには `npm run serve:web` を実行してください。`main` へのpush時にはGitHub Actionsが型検査、Webビルド、GitHub Pages公開を実行します。初回のみリポジトリの **Settings → Pages → Build and deployment** でソースを **GitHub Actions** に設定してください。
 
-バックグラウンド音声、ロック画面コントロール、PiP は Expo Go では検証できません。`app.json` の config plugin と `UIBackgroundModes: ["audio"]` は development build に反映されます。
+## オフラインとブラウザ機能
 
-1. Apple Developer の署名環境、EAS を使える Expo アカウント、実機 iPhone を準備します。
-2. Expo にログインします: `npx eas login`
-3. 初回だけプロジェクトを設定します: `npx eas build:configure`
-4. iOS development build を作成します: `npx eas build --profile development --platform ios`
-5. EAS が案内する URL で iPhone に build をインストールします。
-6. `npx expo start --dev-client` を実行して、インストール済みの development build から開きます。
+初回のオンライン利用後、PWAはアプリシェルと同梱メディアをキャッシュするため、オフラインでも再生できます。更新版を利用するには、ネットワーク接続時にPWAを開き直してください。
 
-`eas.json` の `development` プロファイルは internal distribution と development client を有効にしています。`ios.bundleIdentifier` の `com.example.nagiplayer` は、署名用に自組織の一意な識別子へ変更してください。
-
-## 実機確認項目
-
-- MP3: 消音モード、画面ロック、バックグラウンド継続、ロック画面／コントロールセンターからの操作。
-- MP4: インライン再生、PiP 開始ボタン、アプリを離れた際の自動 PiP、復帰後の時間と再生状態。
-- MP3 と MP4 を連続選択し、同時再生がないこと、前後スキップ・シーク・末尾停止・次項目自動再生を確認。
+再生情報、再生／一時停止、シークは対応ブラウザのMedia Sessionと連携します。バックグラウンド再生、ロック画面の操作、動画のPicture in Pictureは、ブラウザとOSが対応する範囲でのみ利用できます。PiPの非対応環境では開始ボタンは表示されません。
