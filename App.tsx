@@ -25,7 +25,11 @@ export default function App() {
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [pictureInPictureSupported, setPictureInPictureSupported] = useState(false);
   const selected = playlist[selectedIndex];
-  const shouldAutoplay = useRef(false);
+  // `replaceAsync` can finish after a user has paused or selected another item.
+  // Keep the requested state separate from player events so the UI always reflects
+  // the actual player state.
+  const videoShouldPlay = useRef(false);
+  const videoLoadRequest = useRef(0);
   const videoViewRef = useRef<VideoView>(null);
 
   const audioPlayer = useAudioPlayer(null, { updateInterval: 250 });
@@ -40,18 +44,38 @@ export default function App() {
 
   useEffect(() => {
     // Stop both players before a source replacement to prevent overlap.
+    const loadRequest = ++videoLoadRequest.current;
     audioPlayer.pause();
     audioPlayer.clearLockScreenControls();
     videoPlayer.pause();
     setVideoPlaying(false);
     setVideoTime(0);
     setVideoDuration(0);
-    if (selected.kind === 'audio') audioPlayer.replace(selected.mediaAsset);
-    else void videoPlayer.replaceAsync(selected.mediaAsset);
+    if (selected.kind === 'audio') {
+      videoShouldPlay.current = false;
+      audioPlayer.replace(selected.mediaAsset);
+      return;
+    }
+
+    void videoPlayer.replaceAsync(selected.mediaAsset).then(
+      () => {
+        // On web, replaceAsync starts the underlying HTML video automatically.
+        // Explicitly pause unless playback is still wanted after loading.
+        if (loadRequest !== videoLoadRequest.current) return;
+        if (videoShouldPlay.current) videoPlayer.play();
+        else {
+          videoPlayer.pause();
+          setVideoPlaying(false);
+        }
+      },
+      () => {
+        if (loadRequest === videoLoadRequest.current) setVideoPlaying(false);
+      }
+    );
   }, [audioPlayer, selected, videoPlayer]);
 
   const select = (index: number, autoplay = false) => {
-    shouldAutoplay.current = autoplay;
+    videoShouldPlay.current = autoplay;
     setSelectedIndex(index);
   };
 
@@ -59,6 +83,8 @@ export default function App() {
     if (selectedIndex >= playlist.length - 1) {
       audioPlayer.pause();
       videoPlayer.pause();
+      videoShouldPlay.current = false;
+      setVideoPlaying(false);
       return;
     }
     select(selectedIndex + 1, true);
@@ -75,7 +101,11 @@ export default function App() {
     setVideoDuration(videoPlayer.duration);
   });
   useEventListener(videoPlayer, 'playingChange', ({ isPlaying }) => setVideoPlaying(isPlaying));
-  useEventListener(videoPlayer, 'playToEnd', () => { if (selected.kind === 'video') playNext(); });
+  useEventListener(videoPlayer, 'playToEnd', () => {
+    videoShouldPlay.current = false;
+    setVideoPlaying(false);
+    if (selected.kind === 'video') playNext();
+  });
 
   const artworkUri = useMemo(() => selected.artworkAsset === null ? undefined : Asset.fromModule(selected.artworkAsset).uri, [selected]);
   const startSelected = () => {
@@ -86,20 +116,21 @@ export default function App() {
     if (selected.kind === 'audio') {
       audioPlayer.setActiveForLockScreen(true, { title: selected.title, artist: selected.artist, albumTitle: '凪プレイヤー', ...(artworkUri ? { artworkUrl: artworkUri } : {}) });
       audioPlayer.play();
-    } else videoPlayer.play();
+    } else {
+      videoShouldPlay.current = true;
+      videoPlayer.play();
+    }
   };
   const isPlaying = selected.kind === 'audio' ? audioStatus.playing : videoPlaying;
   const currentTime = selected.kind === 'audio' ? audioStatus.currentTime : videoTime;
   const duration = selected.kind === 'audio' ? audioStatus.duration : videoDuration;
-  const toggle = () => isPlaying ? (selected.kind === 'audio' ? audioPlayer.pause() : videoPlayer.pause()) : startSelected();
-
-  useEffect(() => {
-    if (!shouldAutoplay.current) return;
-    shouldAutoplay.current = false;
-    const timer = setTimeout(startSelected, 0);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  const toggle = () => {
+    if (!isPlaying) return startSelected();
+    if (selected.kind === 'audio') return audioPlayer.pause();
+    videoShouldPlay.current = false;
+    videoPlayer.pause();
+    setVideoPlaying(false);
+  };
 
   return <SafeAreaView style={styles.safeArea}><ScrollView contentContainerStyle={styles.page}>
     <Text style={styles.brand}>凪プレイヤー</Text><Text style={styles.caption}>同梱メディアを、いつでも。</Text>
