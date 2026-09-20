@@ -4,7 +4,7 @@ import Slider from '@react-native-community/slider';
 import { Asset } from 'expo-asset';
 import { useEventListener } from 'expo';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { isPictureInPictureSupported, useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { playlist } from './src/playlist';
 import type { PlaylistItem } from './src/types';
 
@@ -12,6 +12,11 @@ const formatTime = (seconds: number) => {
   const safe = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
   return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
 };
+
+const supportsPictureInPicture = () =>
+  typeof document !== 'undefined' &&
+  document.pictureInPictureEnabled === true &&
+  typeof document.exitPictureInPicture === 'function';
 
 export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -30,7 +35,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    setPictureInPictureSupported(isPictureInPictureSupported());
+    setPictureInPictureSupported(supportsPictureInPicture());
   }, []);
 
   useEffect(() => {
