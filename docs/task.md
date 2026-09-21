@@ -17,16 +17,16 @@
 ## 対象外
 
 - ネイティブiOS／Androidアプリのビルド・配布
-- Expo development build、EAS、ネイティブのバックグラウンド再生設定
+- ネイティブiOS／Androidの開発ビルド、バックグラウンド再生設定
 - ファイルアプリからのメディア選択
 - URLストリーミング
 - 再生リストの編集、再生履歴、お気に入り、アカウント機能
 
 ## 実装方針
 
-- ExpoのWeb出力を使用し、単一画面のTypeScriptアプリとして実装する。
+- ViteのWeb出力を使用し、単一画面のTypeScriptアプリとして実装する。
 - `src/mediaAssets.ts` に同梱アセットの登録、`src/playlist.ts` に表示用メタデータを置き、UI実装から分離する。
-- 音声は `expo-audio`、動画は `expo-video` で再生する。曲・動画を切り替える際は、既存プレイヤーを停止して二重再生を防ぐ。
+- 音声と動画はブラウザ標準の `HTMLAudioElement` / `HTMLVideoElement` で再生する。曲・動画を切り替える際は、既存プレイヤーを停止して二重再生を防ぐ。
 - `public/manifest.json` と `workbox-config.js` でPWAのマニフェストとオフラインキャッシュを管理する。
 - 公開先のベースパスはGitHub Pages用の `/nagi-player` とする。
 

@@ -5,4 +5,4 @@
 - `taiko2.mp3` — [02 Taiko2 (short)](https://commons.wikimedia.org/wiki/File:02_Taiko2_(short).oga) を MP3 形式で取得。CC0。
 - `cat-jumpscare-h264.mp4` — [Cat Jumpscare](https://commons.wikimedia.org/wiki/File:Cat_Jumpscare.webm) の H.264/AAC MPEG-4 変換版。CC0。
 
-追加・差し替え後、`src/mediaAssets.ts` の静的な `require(...)` を更新してください。動画は iPhone Safari との互換性のため、H.264 映像／AAC 音声の `.mp4` を使用します。アプリに同梱・配布できる許諾を確認してからコミットします。
+追加・差し替え後、`src/mediaAssets.ts` の静的な `import` を更新してください。動画は iPhone Safari との互換性のため、H.264 映像／AAC 音声の `.mp4` を使用します。アプリに同梱・配布できる許諾を確認してからコミットします。
