@@ -191,15 +191,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const media = activeElement();
-    if (!media || !selected) return;
+    if (!selected) return;
+    const media = selected.kind === 'audio' ? audioRef.current : videoRef.current;
+    if (!media) return;
     media.load();
     syncMediaSession(selected, false);
     if (shouldAutoplay.current) {
       shouldAutoplay.current = false;
-      void playSelected();
+      pauseInactive(selected.kind);
+      requestPlaybackAudioSession();
+      void media.play().catch(() => setIsPlaying(false));
     }
-  }, [activeElement, playSelected, selected, syncMediaSession]);
+  // Reload only when the selected source changes.  Restoring a hidden item
+  // rebuilds the playlist, but must not interrupt the current media.
+  }, [pauseInactive, selected?.id, selected?.mediaUrl, syncMediaSession]);
 
   useEffect(() => {
     if (!('mediaSession' in navigator)) return;
