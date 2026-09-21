@@ -4,6 +4,10 @@ import type { PlaylistItem } from './types';
 import './App.css';
 
 const HIDDEN_BUNDLED_ITEMS_KEY = 'nagi-player.hidden-bundled-items';
+const MAX_LOCAL_FILE_COUNT = 20;
+const MAX_LOCAL_FILE_BYTES = 200 * 1024 * 1024;
+const SUPPORTED_LOCAL_FILE_EXTENSIONS = /\.(mp3|m4a|aac|wav|flac|mp4|m4v|mov|webm)$/i;
+const VIDEO_FILE_EXTENSIONS = /\.(mp4|m4v|mov|webm)$/i;
 
 type PlaylistSource = 'bundled' | 'local';
 type DisplayPlaylistItem = PlaylistItem & { source: PlaylistSource };
@@ -34,6 +38,7 @@ const supportsFullscreen = () =>
 
 export default function App() {
   const [localPlaylist, setLocalPlaylist] = useState<PlaylistItem[]>([]);
+  const [localFileError, setLocalFileError] = useState<string | null>(null);
   const [hiddenBundledIds, setHiddenBundledIds] = useState<string[]>(readHiddenBundledIds);
   const [selectedId, setSelectedId] = useState<string | null>(() => playlist[0]?.id ?? null);
   const [isEditing, setIsEditing] = useState(false);
@@ -175,12 +180,30 @@ export default function App() {
 
   const addLocalFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    const additions = files.map((file, index): PlaylistItem => {
-      const isVideo = file.type.startsWith('video/') || /\.(mp4|m4v|mov|webm)$/i.test(file.name);
+    const availableSlots = Math.max(0, MAX_LOCAL_FILE_COUNT - localPlaylist.length);
+    const validFiles = files.filter(file =>
+      (file.type.startsWith('audio/') || file.type.startsWith('video/') || SUPPORTED_LOCAL_FILE_EXTENSIONS.test(file.name)) &&
+      file.size <= MAX_LOCAL_FILE_BYTES,
+    );
+    const acceptedFiles = validFiles.slice(0, availableSlots);
+    const messages: string[] = [];
+    if (files.some(file => !file.type.startsWith('audio/') && !file.type.startsWith('video/') && !SUPPORTED_LOCAL_FILE_EXTENSIONS.test(file.name))) {
+      messages.push('対応していないファイル形式は追加されませんでした。');
+    }
+    if (files.some(file => file.size > MAX_LOCAL_FILE_BYTES)) {
+      messages.push('1ファイル200 MBまで追加できます。');
+    }
+    if (validFiles.length > acceptedFiles.length) {
+      messages.push(`端末のファイルは最大${MAX_LOCAL_FILE_COUNT}件まで追加できます。`);
+    }
+    setLocalFileError(messages.length ? messages.join(' ') : null);
+
+    const additions = acceptedFiles.map((file): PlaylistItem => {
+      const isVideo = file.type.startsWith('video/') || VIDEO_FILE_EXTENSIONS.test(file.name);
       const mediaUrl = URL.createObjectURL(file);
       localMediaUrls.current.add(mediaUrl);
       return {
-        id: `local-${Date.now()}-${index}-${file.name}`,
+        id: `local-${crypto.randomUUID()}`,
         title: file.name.replace(/\.[^.]+$/, ''),
         artist: 'この端末のファイル',
         kind: isVideo ? 'video' : 'audio',
@@ -242,6 +265,7 @@ export default function App() {
       <div><h2 id="local-files-title">端末のファイルを再生</h2><p>選んだ音声・動画は、この端末とブラウザ内だけで扱われます。</p></div>
       <label className="file-picker">ファイルを選ぶ<input type="file" accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.flac,.mp4,.m4v,.mov,.webm" multiple onChange={addLocalFiles} /></label>
     </section>
+    {localFileError && <p className="local-file-error" role="alert">{localFileError}</p>}
     <audio ref={audioRef} src={selected?.kind === 'audio' ? selected.mediaUrl : undefined} preload="metadata" {...mediaEvents} />
     {selected ? <>
       {selected.kind === 'video' && <video ref={videoRef} className="video" src={selected.mediaUrl} playsInline preload="metadata" {...mediaEvents} />}

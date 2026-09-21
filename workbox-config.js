@@ -4,7 +4,5 @@ module.exports = {
   swDest: 'dist/sw.js',
   maximumFileSizeToCacheInBytes: 25 * 1024 * 1024,
   cleanupOutdatedCaches: true,
-  clientsClaim: true,
-  skipWaiting: true,
   navigateFallback: 'index.html',
 };

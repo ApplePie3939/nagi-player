@@ -10,6 +10,7 @@ header p { margin: 4px 0 0; }
 .local-files { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; padding: 16px; border: 1px solid #d9daf0; border-radius: 16px; background: #fff; }
 .local-files h2 { margin: 0; font-size: 16px; }
 .local-files p { margin: 4px 0 0; color: #77788a; font-size: 13px; }
+.local-file-error { margin: 8px 0 0; color: #ae3143; font-size: 13px; }
 .file-picker { flex: none; border-radius: 12px; padding: 10px 12px; color: white; background: #5a67d8; font-size: 14px; font-weight: 600; cursor: pointer; }
 .file-picker input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
 .artwork, .video { display: block; width: 100%; margin-top: 28px; border-radius: 20px; background: #e7e8f5; object-fit: cover; }
