@@ -134,7 +134,7 @@ export default function App() {
 
   return <SafeAreaView style={styles.safeArea}><ScrollView contentContainerStyle={styles.page}>
     <Text style={styles.brand}>凪プレイヤー</Text><Text style={styles.caption}>同梱メディアを、いつでも。</Text>
-    {selected.kind === 'video' ? <VideoView ref={videoViewRef} style={styles.video} player={videoPlayer} contentFit="contain" nativeControls={false} allowsPictureInPicture startsPictureInPictureAutomatically /> : artworkUri ? <Image source={{ uri: artworkUri }} style={styles.artwork} /> : <View style={[styles.artwork, styles.artworkPlaceholder]}><Text style={styles.artworkText}>♪</Text></View>}
+    {selected.kind === 'video' ? <VideoView ref={videoViewRef} style={styles.video} player={videoPlayer} contentFit="contain" nativeControls={false} fullscreenOptions={{ enable: false }} playsInline allowsPictureInPicture startsPictureInPictureAutomatically /> : artworkUri ? <Image source={{ uri: artworkUri }} style={styles.artwork} /> : <View style={[styles.artwork, styles.artworkPlaceholder]}><Text style={styles.artworkText}>♪</Text></View>}
     <View style={styles.nowPlaying}><Text style={styles.kind}>{selected.kind === 'audio' ? '音声' : '動画'}</Text><Text style={styles.title}>{selected.title}</Text><Text style={styles.artist}>{selected.artist}</Text></View>
     <Slider value={currentTime} minimumValue={0} maximumValue={Math.max(duration, 1)} minimumTrackTintColor="#5a67d8" maximumTrackTintColor="#d8d9e8" thumbTintColor="#5a67d8" onSlidingComplete={value => { if (selected.kind === 'audio') void audioPlayer.seekTo(value); else videoPlayer.currentTime = value; }} />
     <View style={styles.timeRow}><Text>{formatTime(currentTime)}</Text><Text>{formatTime(duration)}</Text></View>
