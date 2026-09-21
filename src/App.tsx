@@ -31,10 +31,23 @@ const supportsPictureInPicture = () =>
   typeof document !== 'undefined' && document.pictureInPictureEnabled && typeof HTMLVideoElement.prototype.requestPictureInPicture === 'function';
 
 type SafariVideoElement = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+type AudioSessionNavigator = Navigator & {
+  audioSession?: { type: 'auto' | 'playback' | 'transient' | 'transient-solo' | 'ambient' | 'play-and-record' };
+};
 
 const supportsFullscreen = () =>
   typeof document !== 'undefined' &&
   (document.fullscreenEnabled || typeof (HTMLVideoElement.prototype as SafariVideoElement).webkitEnterFullscreen === 'function');
+
+const requestPlaybackAudioSession = () => {
+  // This is progressive enhancement: HTML media already has this intent by default,
+  // but supported browsers can use the explicit session when the app is backgrounded.
+  const audioSession = (navigator as AudioSessionNavigator).audioSession;
+  if (!audioSession) return;
+  try {
+    audioSession.type = 'playback';
+  } catch { /* The browser declined the optional audio-session request. */ }
+};
 
 export default function App() {
   const [localPlaylist, setLocalPlaylist] = useState<PlaylistItem[]>([]);
@@ -97,15 +110,21 @@ export default function App() {
 
   const select = useCallback((id: string | null, autoplay = false) => {
     const next = allPlaylist.find(item => item.id === id);
+    const isReselectingCurrentItem = next?.id === selectedId;
     stopPlayback();
     shouldAutoplay.current = autoplay && Boolean(next);
     setSelectedId(next?.id ?? null);
-  }, [allPlaylist, stopPlayback]);
+
+    // Changing state to the same id does not re-run the media-loading effect.
+    // Reload it explicitly so the element and the displayed time always reset together.
+    if (isReselectingCurrentItem) activeElement(next)?.load();
+  }, [activeElement, allPlaylist, selectedId, stopPlayback]);
 
   const playSelected = useCallback(async () => {
     const media = activeElement();
     if (!media || !selected) return;
     pauseInactive(selected.kind);
+    requestPlaybackAudioSession();
     try {
       await media.play();
     } catch {
@@ -173,10 +192,27 @@ export default function App() {
     });
   }, [activeElement, playNext, playSelected, selectRelative]);
 
-  const handleLoadedMetadata = (event: React.SyntheticEvent<HTMLMediaElement>) => setDuration(event.currentTarget.duration);
-  const handleTimeUpdate = (event: React.SyntheticEvent<HTMLMediaElement>) => setCurrentTime(event.currentTarget.currentTime);
-  const handlePlay = () => { if (selected) { setIsPlaying(true); syncMediaSession(selected, true); } };
-  const handlePause = () => { if (selected) { setIsPlaying(false); syncMediaSession(selected, false); } };
+  // Both media elements can emit a final pause/time event while switching tracks.
+  // Only let the currently selected element update the player UI.
+  const isSelectedMediaEvent = (media: HTMLMediaElement) => media === activeElement();
+  const handleLoadedMetadata = (event: React.SyntheticEvent<HTMLMediaElement>) => {
+    if (isSelectedMediaEvent(event.currentTarget)) {
+      const nextDuration = event.currentTarget.duration;
+      setDuration(Number.isFinite(nextDuration) && nextDuration >= 0 ? nextDuration : 0);
+    }
+  };
+  const handleTimeUpdate = (event: React.SyntheticEvent<HTMLMediaElement>) => {
+    if (isSelectedMediaEvent(event.currentTarget)) {
+      const nextTime = event.currentTarget.currentTime;
+      setCurrentTime(Number.isFinite(nextTime) && nextTime >= 0 ? nextTime : 0);
+    }
+  };
+  const handlePlay = (event: React.SyntheticEvent<HTMLMediaElement>) => {
+    if (selected && isSelectedMediaEvent(event.currentTarget)) { setIsPlaying(true); syncMediaSession(selected, true); }
+  };
+  const handlePause = (event: React.SyntheticEvent<HTMLMediaElement>) => {
+    if (selected && isSelectedMediaEvent(event.currentTarget)) { setIsPlaying(false); syncMediaSession(selected, false); }
+  };
   const seek = (value: number) => { const media = activeElement(); if (media) media.currentTime = value; };
 
   const addLocalFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -276,7 +312,15 @@ export default function App() {
     } catch { /* Browser denied the request. */ }
   };
 
-  const mediaEvents = { onLoadedMetadata: handleLoadedMetadata, onTimeUpdate: handleTimeUpdate, onPlay: handlePlay, onPause: handlePause, onEnded: () => playNext() };
+  const mediaEvents = {
+    onLoadedMetadata: handleLoadedMetadata,
+    onTimeUpdate: handleTimeUpdate,
+    onPlay: handlePlay,
+    onPause: handlePause,
+    onEnded: (event: React.SyntheticEvent<HTMLMediaElement>) => {
+      if (isSelectedMediaEvent(event.currentTarget)) playNext();
+    },
+  };
 
   return <main className="page">
     <header><h1>凪プレイヤー</h1><p>同梱メディアを、いつでも。</p></header>
