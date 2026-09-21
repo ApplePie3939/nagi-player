@@ -106,7 +106,7 @@ export default function App() {
     };
     navigator.mediaSession.setActionHandler('play', () => void playSelected());
     navigator.mediaSession.setActionHandler('pause', () => activeElement()?.pause());
-    navigator.mediaSession.setActionHandler('previoustrack', () => select(Math.max(0, selectedIndex - 1)));
+    navigator.mediaSession.setActionHandler('previoustrack', () => select(Math.max(0, selectedIndex - 1), true));
     navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
     navigator.mediaSession.setActionHandler('seekbackward', () => seek(-10));
     navigator.mediaSession.setActionHandler('seekforward', () => seek(10));
@@ -149,7 +149,7 @@ export default function App() {
     <section className="now-playing" aria-live="polite"><span>{selected.kind === 'audio' ? '音声' : '動画'}</span><h2>{selected.title}</h2><p>{selected.artist}</p></section>
     <input className="progress" type="range" aria-label="再生位置" value={currentTime} min="0" max={Math.max(duration, 1)} step="0.1" onChange={event => seek(Number(event.target.value))} />
     <div className="time-row"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
-    <div className="controls"><button onClick={() => select(Math.max(0, selectedIndex - 1))} disabled={selectedIndex === 0}>前へ</button><button className="primary" onClick={toggle}>{isPlaying ? '一時停止' : '再生'}</button><button onClick={() => playNext()} disabled={selectedIndex === playlist.length - 1}>次へ</button></div>
+    <div className="controls"><button onClick={() => select(Math.max(0, selectedIndex - 1), true)} disabled={selectedIndex === 0}>前へ</button><button className="primary" onClick={toggle}>{isPlaying ? '一時停止' : '再生'}</button><button onClick={() => playNext()} disabled={selectedIndex === playlist.length - 1}>次へ</button></div>
     {selected.kind === 'video' && (pictureInPictureSupported || fullscreenSupported) && <div className="video-actions">
       {fullscreenSupported && <button className="video-action" onClick={() => void enterFullscreen()}>全画面表示</button>}
       {pictureInPictureSupported && <button className="video-action" onClick={() => void startPictureInPicture()}>ピクチャ・イン・ピクチャを開始</button>}
