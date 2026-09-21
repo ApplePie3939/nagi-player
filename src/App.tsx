@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { playlist } from './playlist';
+import { deleteLocalMedia, loadLocalMedia, saveLocalMedia, setLocalMediaHidden } from './localMediaStorage';
 import type { PlaylistItem } from './types';
 import './App.css';
 
@@ -53,6 +54,7 @@ export default function App() {
   const [localPlaylist, setLocalPlaylist] = useState<PlaylistItem[]>([]);
   const [hiddenLocalPlaylist, setHiddenLocalPlaylist] = useState<PlaylistItem[]>([]);
   const [localFileError, setLocalFileError] = useState<string | null>(null);
+  const [isLocalMediaReady, setIsLocalMediaReady] = useState(false);
   const [hiddenBundledIds, setHiddenBundledIds] = useState<string[]>(readHiddenBundledIds);
   const [selectedId, setSelectedId] = useState<string | null>(() => playlist[0]?.id ?? null);
   const [isEditing, setIsEditing] = useState(false);
@@ -153,6 +155,31 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    let isCurrent = true;
+    void loadLocalMedia().then(items => {
+      if (!isCurrent) return;
+      const restored = items.map(item => {
+        const mediaUrl = URL.createObjectURL(item.file);
+        localMediaUrls.current.add(mediaUrl);
+        return {
+          id: item.id,
+          title: item.title,
+          artist: 'この端末のファイル',
+          kind: item.kind,
+          mediaUrl,
+        } satisfies PlaylistItem;
+      });
+      setLocalPlaylist(restored.filter(item => !items.find(stored => stored.id === item.id)?.hidden));
+      setHiddenLocalPlaylist(restored.filter(item => items.find(stored => stored.id === item.id)?.hidden));
+    }).catch(() => {
+      if (isCurrent) setLocalFileError('端末内のファイルを復元できませんでした。');
+    }).finally(() => {
+      if (isCurrent) setIsLocalMediaReady(true);
+    });
+    return () => { isCurrent = false; };
+  }, []);
+
+  useEffect(() => {
     try {
       localStorage.setItem(HIDDEN_BUNDLED_ITEMS_KEY, JSON.stringify(hiddenBundledIds));
     } catch { /* Storage is unavailable; the current-session setting still works. */ }
@@ -215,7 +242,7 @@ export default function App() {
   };
   const seek = (value: number) => { const media = activeElement(); if (media) media.currentTime = value; };
 
-  const addLocalFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const addLocalFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
     const availableSlots = Math.max(0, MAX_LOCAL_FILE_COUNT - localPlaylist.length - hiddenLocalPlaylist.length);
     const validFiles = files.filter(file =>
@@ -248,6 +275,23 @@ export default function App() {
       };
     });
     if (additions.length) {
+      try {
+        await Promise.all(additions.map((item, index) => saveLocalMedia({
+          id: item.id,
+          title: item.title,
+          kind: item.kind,
+          hidden: false,
+          file: acceptedFiles[index],
+        })));
+      } catch {
+        additions.forEach(item => {
+          URL.revokeObjectURL(item.mediaUrl);
+          localMediaUrls.current.delete(item.mediaUrl);
+        });
+        setLocalFileError('端末内のファイルを保存できませんでした。ブラウザの保存容量を確認してください。');
+        event.target.value = '';
+        return;
+      }
       setLocalPlaylist(items => [...items, ...additions]);
       if (!selected) setSelectedId(additions[0].id);
     }
@@ -271,6 +315,7 @@ export default function App() {
 
     if (item.source === 'local') {
       setLocalPlaylist(items => items.filter(candidate => candidate.id !== item.id));
+      void deleteLocalMedia(item.id).catch(() => setLocalFileError('端末内のファイルを削除できませんでした。'));
       URL.revokeObjectURL(item.mediaUrl);
       localMediaUrls.current.delete(item.mediaUrl);
     } else {
@@ -284,6 +329,7 @@ export default function App() {
     selectReplacementItem(item);
     setLocalPlaylist(items => items.filter(candidate => candidate.id !== item.id));
     setHiddenLocalPlaylist(items => [...items, item]);
+    void setLocalMediaHidden(item.id, true).catch(() => setLocalFileError('非表示の状態を保存できませんでした。'));
   };
 
   const restoreBundledItem = (id: string) => setHiddenBundledIds(ids => ids.filter(itemId => itemId !== id));
@@ -292,6 +338,7 @@ export default function App() {
     if (!item) return;
     setHiddenLocalPlaylist(items => items.filter(candidate => candidate.id !== id));
     setLocalPlaylist(items => [...items, item]);
+    void setLocalMediaHidden(id, false).catch(() => setLocalFileError('表示状態を保存できませんでした。'));
     if (!selectedId) setSelectedId(item.id);
   };
   const toggle = () => isPlaying ? activeElement()?.pause() : void playSelected();
@@ -326,7 +373,7 @@ export default function App() {
     <header><h1>凪プレイヤー</h1><p>同梱メディアを、いつでも。</p></header>
     <section className="local-files" aria-labelledby="local-files-title">
       <div><h2 id="local-files-title">端末のファイルを再生</h2><p>選んだ音声・動画は、この端末とブラウザ内だけで扱われます。</p></div>
-      <label className="file-picker">ファイルを選ぶ<input type="file" accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.flac,.mp4,.m4v,.mov,.webm" multiple onChange={addLocalFiles} /></label>
+      <label className="file-picker">{isLocalMediaReady ? 'ファイルを選ぶ' : '復元中…'}<input type="file" accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.flac,.mp4,.m4v,.mov,.webm" multiple onChange={event => void addLocalFiles(event)} disabled={!isLocalMediaReady} /></label>
     </section>
     {localFileError && <p className="local-file-error" role="alert">{localFileError}</p>}
     <audio ref={audioRef} src={selected?.kind === 'audio' ? selected.mediaUrl : undefined} preload="metadata" {...mediaEvents} />
