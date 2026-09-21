@@ -5,7 +5,7 @@ import './App.css';
 
 const HIDDEN_BUNDLED_ITEMS_KEY = 'nagi-player.hidden-bundled-items';
 const MAX_LOCAL_FILE_COUNT = 20;
-const MAX_LOCAL_FILE_BYTES = 200 * 1024 * 1024;
+const MAX_LOCAL_FILE_BYTES = 5 * 1024 * 1024 * 1024;
 const SUPPORTED_LOCAL_FILE_EXTENSIONS = /\.(mp3|m4a|aac|wav|flac|mp4|m4v|mov|webm)$/i;
 const VIDEO_FILE_EXTENSIONS = /\.(mp4|m4v|mov|webm)$/i;
 
@@ -38,6 +38,7 @@ const supportsFullscreen = () =>
 
 export default function App() {
   const [localPlaylist, setLocalPlaylist] = useState<PlaylistItem[]>([]);
+  const [hiddenLocalPlaylist, setHiddenLocalPlaylist] = useState<PlaylistItem[]>([]);
   const [localFileError, setLocalFileError] = useState<string | null>(null);
   const [hiddenBundledIds, setHiddenBundledIds] = useState<string[]>(readHiddenBundledIds);
   const [selectedId, setSelectedId] = useState<string | null>(() => playlist[0]?.id ?? null);
@@ -180,7 +181,7 @@ export default function App() {
 
   const addLocalFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
-    const availableSlots = Math.max(0, MAX_LOCAL_FILE_COUNT - localPlaylist.length);
+    const availableSlots = Math.max(0, MAX_LOCAL_FILE_COUNT - localPlaylist.length - hiddenLocalPlaylist.length);
     const validFiles = files.filter(file =>
       (file.type.startsWith('audio/') || file.type.startsWith('video/') || SUPPORTED_LOCAL_FILE_EXTENSIONS.test(file.name)) &&
       file.size <= MAX_LOCAL_FILE_BYTES,
@@ -191,7 +192,7 @@ export default function App() {
       messages.push('対応していないファイル形式は追加されませんでした。');
     }
     if (files.some(file => file.size > MAX_LOCAL_FILE_BYTES)) {
-      messages.push('1ファイル200 MBまで追加できます。');
+      messages.push('1ファイル5 GBまで追加できます。');
     }
     if (validFiles.length > acceptedFiles.length) {
       messages.push(`端末のファイルは最大${MAX_LOCAL_FILE_COUNT}件まで追加できます。`);
@@ -217,17 +218,20 @@ export default function App() {
     event.target.value = '';
   };
 
+  const selectReplacementItem = (item: DisplayPlaylistItem) => {
+    if (selectedId !== item.id) return;
+    const itemIndex = allPlaylist.findIndex(candidate => candidate.id === item.id);
+    const nextItem = allPlaylist[itemIndex + 1] ?? allPlaylist[itemIndex - 1];
+    select(nextItem?.id ?? null);
+  };
+
   const removeItem = (item: DisplayPlaylistItem) => {
     const message = item.source === 'local'
       ? `「${item.title}」を再生リストから削除しますか？\n端末の元ファイルは削除されません。`
       : `「${item.title}」をこのブラウザで非表示にしますか？\n編集モードから後で表示に戻せます。`;
     if (!window.confirm(message)) return;
 
-    const itemIndex = allPlaylist.findIndex(candidate => candidate.id === item.id);
-    const nextItem = selectedId === item.id
-      ? allPlaylist[itemIndex + 1] ?? allPlaylist[itemIndex - 1]
-      : undefined;
-    if (selectedId === item.id) select(nextItem?.id ?? null);
+    selectReplacementItem(item);
 
     if (item.source === 'local') {
       setLocalPlaylist(items => items.filter(candidate => candidate.id !== item.id));
@@ -238,7 +242,22 @@ export default function App() {
     }
   };
 
+  const hideLocalItem = (item: DisplayPlaylistItem) => {
+    if (!window.confirm(`「${item.title}」をこの画面で非表示にしますか？\n編集モードから後で表示に戻せます。`)) return;
+
+    selectReplacementItem(item);
+    setLocalPlaylist(items => items.filter(candidate => candidate.id !== item.id));
+    setHiddenLocalPlaylist(items => [...items, item]);
+  };
+
   const restoreBundledItem = (id: string) => setHiddenBundledIds(ids => ids.filter(itemId => itemId !== id));
+  const restoreLocalItem = (id: string) => {
+    const item = hiddenLocalPlaylist.find(candidate => candidate.id === id);
+    if (!item) return;
+    setHiddenLocalPlaylist(items => items.filter(candidate => candidate.id !== id));
+    setLocalPlaylist(items => [...items, item]);
+    if (!selectedId) setSelectedId(item.id);
+  };
   const toggle = () => isPlaying ? activeElement()?.pause() : void playSelected();
 
   const startPictureInPicture = async () => {
@@ -283,10 +302,11 @@ export default function App() {
       <div className="playlist-heading"><h2>再生リスト</h2><button className="edit-button" onClick={() => setIsEditing(editing => !editing)} aria-pressed={isEditing}>{isEditing ? '完了' : '編集'}</button></div>
       {allPlaylist.map(item => <div key={item.id} className={`playlist-row ${item.id === selectedId ? 'selected' : ''}`}>
         <button className="playlist-select" onClick={() => select(item.id)}><span><strong>{item.title}</strong><small>{item.artist}</small></span><em>{item.kind === 'audio' ? '音声' : '動画'}</em></button>
-        {isEditing && <button className="remove-button" onClick={() => removeItem(item)}>{item.source === 'local' ? '削除' : '非表示'}</button>}
+        {isEditing && item.source === 'local' && <><button className="hide-button" onClick={() => hideLocalItem(item)}>非表示</button><button className="remove-button" onClick={() => removeItem(item)}>削除</button></>}
+        {isEditing && item.source === 'bundled' && <button className="hide-button" onClick={() => removeItem(item)}>非表示</button>}
       </div>)}
       {!allPlaylist.length && <p className="empty-playlist">再生リストは空です。</p>}
-      {isEditing && hiddenBundledItems.length > 0 && <section className="hidden-items" aria-labelledby="hidden-items-title"><h3 id="hidden-items-title">非表示の素材</h3>{hiddenBundledItems.map(item => <div className="hidden-row" key={item.id}><span><strong>{item.title}</strong><small>{item.artist}</small></span><button className="restore-button" onClick={() => restoreBundledItem(item.id)}>表示に戻す</button></div>)}</section>}
+      {isEditing && (hiddenBundledItems.length > 0 || hiddenLocalPlaylist.length > 0) && <section className="hidden-items" aria-labelledby="hidden-items-title"><h3 id="hidden-items-title">非表示の素材</h3>{hiddenBundledItems.map(item => <div className="hidden-row" key={item.id}><span><strong>{item.title}</strong><small>{item.artist}</small></span><button className="restore-button" onClick={() => restoreBundledItem(item.id)}>表示に戻す</button></div>)}{hiddenLocalPlaylist.map(item => <div className="hidden-row" key={item.id}><span><strong>{item.title}</strong><small>{item.artist}</small></span><button className="restore-button" onClick={() => restoreLocalItem(item.id)}>表示に戻す</button></div>)}</section>}
     </section>
     <p className="notice">対応ブラウザでは、メディア操作、全画面表示、ピクチャ・イン・ピクチャを利用できます。</p>
   </main>;
