@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { playlist } from './playlist';
 import type { PlaylistItem } from './types';
 import './App.css';
@@ -18,6 +18,7 @@ const supportsFullscreen = () =>
   (document.fullscreenEnabled || typeof (HTMLVideoElement.prototype as SafariVideoElement).webkitEnterFullscreen === 'function');
 
 export default function App() {
+  const [localPlaylist, setLocalPlaylist] = useState<PlaylistItem[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -27,7 +28,9 @@ export default function App() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const shouldAutoplay = useRef(false);
-  const selected = playlist[selectedIndex];
+  const localMediaUrls = useRef(new Set<string>());
+  const allPlaylist = useMemo(() => [...playlist, ...localPlaylist], [localPlaylist]);
+  const selected = allPlaylist[selectedIndex];
 
   const activeElement = useCallback((item = selected): HTMLMediaElement | null =>
     item.kind === 'audio' ? audioRef.current : videoRef.current, [selected]);
@@ -60,7 +63,7 @@ export default function App() {
   }, [activeElement, pauseInactive, selected]);
 
   const select = useCallback((index: number, autoplay = false) => {
-    const next = playlist[index];
+    const next = allPlaylist[index];
     audioRef.current?.pause();
     videoRef.current?.pause();
     shouldAutoplay.current = autoplay;
@@ -70,17 +73,21 @@ export default function App() {
     setSelectedIndex(index);
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
     if (!next.mediaUrl) shouldAutoplay.current = false;
-  }, []);
+  }, [allPlaylist]);
 
   const playNext = useCallback((autoplay = true) => {
-    if (selectedIndex >= playlist.length - 1) {
+    if (selectedIndex >= allPlaylist.length - 1) {
       activeElement()?.pause();
       shouldAutoplay.current = false;
       setIsPlaying(false);
       return;
     }
     select(selectedIndex + 1, autoplay);
-  }, [activeElement, select, selectedIndex]);
+  }, [activeElement, allPlaylist.length, select, selectedIndex]);
+
+  useEffect(() => () => {
+    localMediaUrls.current.forEach(url => URL.revokeObjectURL(url));
+  }, []);
 
   useEffect(() => {
     setPictureInPictureSupported(supportsPictureInPicture());
@@ -123,6 +130,24 @@ export default function App() {
   const handleEnded = () => playNext();
   const seek = (value: number) => { const media = activeElement(); if (media) media.currentTime = value; };
 
+  const addLocalFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    const additions = files.map((file, index): PlaylistItem => {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|m4v|mov|webm)$/i.test(file.name);
+      const mediaUrl = URL.createObjectURL(file);
+      localMediaUrls.current.add(mediaUrl);
+      return {
+        id: `local-${Date.now()}-${index}-${file.name}`,
+        title: file.name.replace(/\.[^.]+$/, ''),
+        artist: 'この端末のファイル',
+        kind: isVideo ? 'video' : 'audio',
+        mediaUrl,
+      };
+    });
+    if (additions.length) setLocalPlaylist(items => [...items, ...additions]);
+    event.target.value = '';
+  };
+
   const toggle = () => isPlaying ? activeElement()?.pause() : void playSelected();
   const startPictureInPicture = async () => {
     const video = videoRef.current;
@@ -143,18 +168,22 @@ export default function App() {
 
   return <main className="page">
     <header><h1>凪プレイヤー</h1><p>同梱メディアを、いつでも。</p></header>
+    <section className="local-files" aria-labelledby="local-files-title">
+      <div><h2 id="local-files-title">端末のファイルを再生</h2><p>選んだ音声・動画は、この端末とブラウザ内だけで扱われます。</p></div>
+      <label className="file-picker">ファイルを選ぶ<input type="file" accept="audio/*,video/*,.mp3,.m4a,.aac,.wav,.flac,.mp4,.m4v,.mov,.webm" multiple onChange={addLocalFiles} /></label>
+    </section>
     <audio ref={audioRef} src={selected.kind === 'audio' ? selected.mediaUrl : undefined} preload="metadata" {...mediaEvents} />
     {selected.kind === 'video' && <video ref={videoRef} className="video" src={selected.mediaUrl} playsInline preload="metadata" {...mediaEvents} />}
     {selected.kind === 'audio' && (selected.artworkUrl ? <img className="artwork" src={selected.artworkUrl} alt={`${selected.title}のアートワーク`} /> : <div className="artwork placeholder" aria-hidden="true">♪</div>)}
     <section className="now-playing" aria-live="polite"><span>{selected.kind === 'audio' ? '音声' : '動画'}</span><h2>{selected.title}</h2><p>{selected.artist}</p></section>
     <input className="progress" type="range" aria-label="再生位置" value={currentTime} min="0" max={Math.max(duration, 1)} step="0.1" onChange={event => seek(Number(event.target.value))} />
     <div className="time-row"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
-    <div className="controls"><button onClick={() => select(Math.max(0, selectedIndex - 1), true)} disabled={selectedIndex === 0}>前へ</button><button className="primary" onClick={toggle}>{isPlaying ? '一時停止' : '再生'}</button><button onClick={() => playNext()} disabled={selectedIndex === playlist.length - 1}>次へ</button></div>
+    <div className="controls"><button onClick={() => select(Math.max(0, selectedIndex - 1), true)} disabled={selectedIndex === 0}>前へ</button><button className="primary" onClick={toggle}>{isPlaying ? '一時停止' : '再生'}</button><button onClick={() => playNext()} disabled={selectedIndex === allPlaylist.length - 1}>次へ</button></div>
     {selected.kind === 'video' && (pictureInPictureSupported || fullscreenSupported) && <div className="video-actions">
       {fullscreenSupported && <button className="video-action" onClick={() => void enterFullscreen()}>全画面表示</button>}
       {pictureInPictureSupported && <button className="video-action" onClick={() => void startPictureInPicture()}>ピクチャ・イン・ピクチャを開始</button>}
     </div>}
-    <section className="playlist"><h2>再生リスト</h2>{playlist.map((item, index) => <button key={item.id} className={`playlist-row ${index === selectedIndex ? 'selected' : ''}`} onClick={() => select(index)}><span><strong>{item.title}</strong><small>{item.artist}</small></span><em>{item.kind === 'audio' ? '音声' : '動画'}</em></button>)}</section>
+    <section className="playlist"><h2>再生リスト</h2>{allPlaylist.map((item, index) => <button key={item.id} className={`playlist-row ${index === selectedIndex ? 'selected' : ''}`} onClick={() => select(index)}><span><strong>{item.title}</strong><small>{item.artist}</small></span><em>{item.kind === 'audio' ? '音声' : '動画'}</em></button>)}</section>
     <p className="notice">対応ブラウザでは、メディア操作、全画面表示、ピクチャ・イン・ピクチャを利用できます。</p>
   </main>;
 }
