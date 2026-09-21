@@ -1,32 +1,38 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Dependencies
 node_modules/
 
-# Expo
-.expo/
+# Build output
 dist/
 web-build/
-expo-env.d.ts
 
-# Metro
+# Local tool state
+.expo/
 .metro-health-check*
 
-# debug
+# Local configuration and certificates
+.env*.local
+*.pem
+
+# Logs and TypeScript build metadata
 npm-debug.*
 yarn-debug.*
 yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
 *.tsbuildinfo
 
-# generated native folders
+# Generated native projects
 /ios
 /android
+expo-env.d.ts
+
+# OS files
+.DS_Store
+
+# Personal media: keep purchased files local and out of the public repository.
+# The three tracked demo files remain included for development and deployment.
+/assets/media/*
+!/assets/media/README.md
+!/assets/media/taiko2.mp3
+!/assets/media/cat-jumpscare-h264.mp4
+
+# Name personal artwork as private-<name>.<extension> to keep it local too.
+/assets/artwork/private-*
