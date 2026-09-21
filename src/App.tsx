@@ -11,12 +11,19 @@ const formatTime = (seconds: number) => {
 const supportsPictureInPicture = () =>
   typeof document !== 'undefined' && document.pictureInPictureEnabled && typeof HTMLVideoElement.prototype.requestPictureInPicture === 'function';
 
+type SafariVideoElement = HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+
+const supportsFullscreen = () =>
+  typeof document !== 'undefined' &&
+  (document.fullscreenEnabled || typeof (HTMLVideoElement.prototype as SafariVideoElement).webkitEnterFullscreen === 'function');
+
 export default function App() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [pictureInPictureSupported, setPictureInPictureSupported] = useState(false);
+  const [fullscreenSupported, setFullscreenSupported] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const shouldAutoplay = useRef(false);
@@ -75,7 +82,10 @@ export default function App() {
     select(selectedIndex + 1, autoplay);
   }, [activeElement, select, selectedIndex]);
 
-  useEffect(() => setPictureInPictureSupported(supportsPictureInPicture()), []);
+  useEffect(() => {
+    setPictureInPictureSupported(supportsPictureInPicture());
+    setFullscreenSupported(supportsFullscreen());
+  }, []);
 
   useEffect(() => {
     const media = activeElement();
@@ -119,6 +129,15 @@ export default function App() {
     if (!video || document.pictureInPictureElement) return;
     try { await video.requestPictureInPicture(); } catch { /* Browser denied the request. */ }
   };
+  const enterFullscreen = async () => {
+    const video = videoRef.current as SafariVideoElement | null;
+    if (!video) return;
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (video.requestFullscreen) await video.requestFullscreen();
+      else video.webkitEnterFullscreen?.();
+    } catch { /* Browser denied the request. */ }
+  };
 
   const mediaEvents = { onLoadedMetadata: handleLoadedMetadata, onTimeUpdate: handleTimeUpdate, onPlay: handlePlay, onPause: handlePause, onEnded: handleEnded };
 
@@ -131,8 +150,11 @@ export default function App() {
     <input className="progress" type="range" aria-label="再生位置" value={currentTime} min="0" max={Math.max(duration, 1)} step="0.1" onChange={event => seek(Number(event.target.value))} />
     <div className="time-row"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
     <div className="controls"><button onClick={() => select(Math.max(0, selectedIndex - 1))} disabled={selectedIndex === 0}>前へ</button><button className="primary" onClick={toggle}>{isPlaying ? '一時停止' : '再生'}</button><button onClick={() => playNext()} disabled={selectedIndex === playlist.length - 1}>次へ</button></div>
-    {selected.kind === 'video' && pictureInPictureSupported && <button className="pip" onClick={() => void startPictureInPicture()}>ピクチャ・イン・ピクチャを開始</button>}
+    {selected.kind === 'video' && (pictureInPictureSupported || fullscreenSupported) && <div className="video-actions">
+      {fullscreenSupported && <button className="video-action" onClick={() => void enterFullscreen()}>全画面表示</button>}
+      {pictureInPictureSupported && <button className="video-action" onClick={() => void startPictureInPicture()}>ピクチャ・イン・ピクチャを開始</button>}
+    </div>}
     <section className="playlist"><h2>再生リスト</h2>{playlist.map((item, index) => <button key={item.id} className={`playlist-row ${index === selectedIndex ? 'selected' : ''}`} onClick={() => select(index)}><span><strong>{item.title}</strong><small>{item.artist}</small></span><em>{item.kind === 'audio' ? '音声' : '動画'}</em></button>)}</section>
-    <p className="notice">対応ブラウザでは、メディア操作とピクチャ・イン・ピクチャを利用できます。</p>
+    <p className="notice">対応ブラウザでは、メディア操作、全画面表示、ピクチャ・イン・ピクチャを利用できます。</p>
   </main>;
 }
